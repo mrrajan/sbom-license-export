@@ -1,4 +1,5 @@
 mod cdx_license;
+mod spdx_license;
 use clap::{Command, Arg};
 use simplelog::*;
 
@@ -43,9 +44,11 @@ async fn main(){
 
     let sbom_file = cli.get_one::<String>("sbom_file").unwrap();
     let sbom_type = cli.get_one::<String>("sbom_type").unwrap();
-    let default_path = "license_cdx.csv".to_string();
+    let default_path = "license.csv".to_string();
     let csv_path = cli.get_one::<String>("output_path").unwrap_or(&default_path);
     if sbom_type == "cdx"{
-        cdx_license::get_bom_license(sbom_file, csv_path).await;
+        cdx_license::get_cdx_bom_license(sbom_file, csv_path).await;
+    } else if sbom_type == "spdx"{
+        spdx_license::get_spdx_bom_license(sbom_file, csv_path).await;
     }
 }
