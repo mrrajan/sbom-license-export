@@ -1,0 +1,3 @@
+sbom_license.log
+target/*
+*.csv*
