@@ -4,7 +4,7 @@ use tokio::io::AsyncReadExt;
 use csv::Writer;
 use std::error::Error; 
 use log::info;
-
+use regex::Regex;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ReferenceObj{
@@ -59,8 +59,10 @@ pub async fn write_spdx_csv(packages: &Packages, licenseRef: &HasLicenseInfo, cs
     let mut wtr = Writer::from_path(csv_path)?;
     for package in &packages.packages{
         let package_name = &package.name;
+        let re = Regex::new(r" OR | AND ").unwrap();
         if let Some(license_id_spdx) = &package.licenseDeclared{
-            let license_ids = license_id_spdx.split("OR").clone();
+            let license_id_list = license_id_spdx.replace("(","").replace(")","");
+            let license_ids: Vec<&str> = re.split(&license_id_list).collect();
             for id in license_ids{
                 let mut license_name = id;
                 if let Some(license_map) = &licenseRef.hasExtractedLicensingInfos{
