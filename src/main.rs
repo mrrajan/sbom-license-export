@@ -35,7 +35,7 @@ async fn main(){
                         .required(true)
                 )
                 .arg(
-                    Arg::new("output_path")
+                    Arg::new("csv_path")
                         .help("SBOM License CSV Path")
                         .short('o')
                         .long("csv_path")
@@ -45,7 +45,7 @@ async fn main(){
     let sbom_file = cli.get_one::<String>("sbom_file").unwrap();
     let sbom_type = cli.get_one::<String>("sbom_type").unwrap();
     let default_path = "license.csv".to_string();
-    let csv_path = cli.get_one::<String>("output_path").unwrap_or(&default_path);
+    let csv_path = cli.get_one::<String>("csv_path").unwrap_or(&default_path);
     if sbom_type == "cdx"{
         cdx_license::get_cdx_bom_license(sbom_file, csv_path).await;
     } else if sbom_type == "spdx"{
