@@ -119,7 +119,7 @@ pub async fn write_spdx_csv(packages: &Packages, licenseRef: &HasLicenseInfo, cs
                             package_reference: purl.to_string(),
                             license_id: id.to_string(),
                             license_name: license_name.to_string(),
-                            alternate_ref: alternate_ref.join(" ").to_string(),
+                            alternate_ref: alternate_ref.join("\n").to_string(),
                         });
                     }
                 }
