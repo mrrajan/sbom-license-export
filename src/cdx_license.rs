@@ -23,10 +23,12 @@ pub struct Component{
     pub name: String,
     pub licenses: Option<Option<Vec<LicenseEntry>>>,
     pub purl: Option<String>,
+    pub cpe: Option<Option<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Components{
+    pub metadata: SBOMLicense,
     pub components: Vec<Component>,
 }
 
@@ -37,7 +39,13 @@ pub struct LicenseHeader<'a>{
     license_id: &'a String,
     license_name: &'a String,
     //license_url: &'a String,
-    //license_expression: &'a String,
+    license_expression: &'a String,
+    alternate_reference_locator: &'a String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SBOMLicense{
+    pub licenses: Option<Option<Vec<LicenseEntry>>>,
 }
 
 pub async fn get_cdx_bom_license(filepath: &str, output_path: &String){
@@ -53,6 +61,12 @@ pub async fn write_cdx_csv(comp: &Components, csv_path: &String) -> Result<(), B
     let mut wtr = Writer::from_path(csv_path)?;
         for component in &comp.components{      
         let package_name = component.name.clone();
+        let mut cpe_name = "";
+        if let Some(inner_cpe) = &component.cpe{
+            if let Some(cpe) = inner_cpe{
+                cpe_name = &cpe;
+            }
+        }
         if let Some(purl_nonempty) = &component.purl{
             let purl = purl_nonempty;
             if let Some(inner_licenses) = &component.licenses{
@@ -77,9 +91,10 @@ pub async fn write_cdx_csv(comp: &Components, csv_path: &String) -> Result<(), B
                                     name: &package_name.to_string(),
                                     package_reference: &purl.to_string(),
                                     license_id: &license_id.to_string(),
-                                    license_name: &"".to_string(),
+                                    license_name: &license_name.to_string(),
                                     //license_url:  &license_url.to_string(),
-                                    //license_expression: &license_exp.to_string(),
+                                    license_expression: &license_exp.to_string(),
+                                    alternate_reference_locator: &cpe_name.to_string(),
                                     }
                                 );
                             }else{
@@ -89,7 +104,8 @@ pub async fn write_cdx_csv(comp: &Components, csv_path: &String) -> Result<(), B
                                     license_id: &"".to_string(),
                                     license_name: &license_name.to_string(),
                                     //license_url:  &license_url.to_string(),
-                                    //license_expression: &license_exp.to_string(),
+                                    license_expression: &license_exp.to_string(),
+                                    alternate_reference_locator: &cpe_name.to_string(),
                                     }
                                 );
 
@@ -97,26 +113,40 @@ pub async fn write_cdx_csv(comp: &Components, csv_path: &String) -> Result<(), B
                         }
                         if let Some(expression)=&entry.expression{
                             license_exp = expression;
-                        }
-                        
-                        //let expression = license_exp.replace("(","").replace(")","");
-                        let re = Regex::new(r" OR | AND ").unwrap();
-                        let expression_list: Vec<&str> = re.split(&license_exp).collect();
-                        //let expression_list = expression.split(" OR ").clone();
-                        for exp in expression_list{
-                            if !exp.is_empty() && exp != ""{
+                            if !license_exp.is_empty() && license_exp != ""{
                                 let _ = wtr.serialize(LicenseHeader{
                                     name: &package_name.to_string(),
                                     package_reference: &purl.to_string(),
-                                    license_id: &exp.replace("(","").replace(")","").to_string(),
+                                    license_id: &license_id.to_string(),
                                     license_name: &license_name.to_string(),
                                     //license_url:  &license_url.to_string(),
-                                    //license_expression: &license_exp.to_string(),
+                                    license_expression: &license_exp.to_string(),
+                                    alternate_reference_locator: &cpe_name.to_string(),
                                     }
                                 );
                             }
-                            
                         }
+                        
+                        // This block is to split license expressions into individuals and handle them on each row.
+                        // //let expression = license_exp.replace("(","").replace(")","");
+                        // let re = Regex::new(r" OR | AND ").unwrap();
+                        // let expression_list: Vec<&str> = re.split(&license_exp).collect();
+                        // //let expression_list = expression.split(" OR ").clone();
+                        // for exp in expression_list{
+                        //     if !exp.is_empty() && exp != ""{
+                        //         let _ = wtr.serialize(LicenseHeader{
+                        //             name: &package_name.to_string(),
+                        //             package_reference: &purl.to_string(),
+                        //             license_id: &exp.replace("(","").replace(")","").to_string(),
+                        //             license_name: &license_name.to_string(),
+                        //             //license_url:  &license_url.to_string(),
+                        //             //license_expression: &license_exp.to_string(),
+                        //             alternate_reference_locator: &cpe_name.to_string;
+                        //             }
+                        //         );
+                        //     }
+                            
+                        // }
 
                     }
                 }

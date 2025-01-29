@@ -40,6 +40,13 @@ async fn main(){
                         .short('o')
                         .long("csv_path")
                         .required(false)
+                )
+                .arg(
+                    Arg::new("ref_file_path")
+                        .help("SPDX SBOM License Reference Path")
+                        .short('r')
+                        .long("ref_file_path")
+                        .required(false)
                 ).get_matches();
 
     let sbom_file = cli.get_one::<String>("sbom_file").unwrap();
@@ -49,6 +56,8 @@ async fn main(){
     if sbom_type == "cdx"{
         cdx_license::get_cdx_bom_license(sbom_file, csv_path).await;
     } else if sbom_type == "spdx"{
-        spdx_license::get_spdx_bom_license(sbom_file, csv_path).await;
+        let default_ref_path = "license_ref.csv".to_string();
+        let ref_file_path = cli.get_one::<String>("ref_file_path").unwrap_or(&default_ref_path);
+        spdx_license::get_spdx_bom_license(sbom_file, csv_path, ref_file_path).await;
     }
 }
