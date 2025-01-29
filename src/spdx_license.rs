@@ -63,11 +63,9 @@ pub async fn get_spdx_bom_license(filepath: &str, output_path: &String, ref_file
     let license_extract: HasLicenseInfo = serde_json::from_str(&content_str).expect("Error converting Json");
     let _ = write_spdx_csv(&data, &license_extract, output_path).await;
     let _ = write_ref_csv(&license_extract, ref_file_path).await;
-    println!("Done");
 }
 
 pub async fn write_ref_csv(licenseRef: &HasLicenseInfo, ref_file_path: &String) -> Result<(), Box<dyn Error>>{
-    println!("Ref");
     let mut wrt_ref = Writer::from_path(ref_file_path)?;
     if let Some(inner_license_map) = &licenseRef.hasExtractedLicensingInfos{
         if let Some(license_map) = inner_license_map{
@@ -81,7 +79,6 @@ pub async fn write_ref_csv(licenseRef: &HasLicenseInfo, ref_file_path: &String) 
             }
         }
     }
-    println!("RefDone");
     wrt_ref.flush()?;
     Ok(())
 }
