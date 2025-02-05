@@ -1,7 +1,7 @@
 use serde_derive::{Deserialize, Serialize};
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
-use csv::Writer;
+use csv::{QuoteStyle, Writer, WriterBuilder};
 use std::error::Error; 
 use log::info;
 use regex::Regex;
@@ -46,17 +46,24 @@ pub struct LicenseHeader{
     namespace: String,
     group: String,
     version: String,
+    #[serde(rename = "package reference")]
     package_reference: String,
+    #[serde(rename = "license id")]
     license_id: String,
+    #[serde(rename = "license name")]
     license_name: String,
+    #[serde(rename = "license expression")]
     license_expression: String,
+    #[serde(rename = "alternate package reference")]
     alternate_ref: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct LicenseRefHeader{
+    #[serde(rename = "licenseId")]
     license_id: String,
     name: String,
+    #[serde(rename = "extracted text")]
     extracted_text: String,
     comment: String,
 }
@@ -73,7 +80,11 @@ pub async fn get_spdx_bom_license(filepath: &str, output_path: &String, ref_file
 }
 
 pub async fn write_ref_csv(licenseRef: &HasLicenseInfo, ref_file_path: &String) -> Result<(), Box<dyn Error>>{
-    let mut wrt_ref = Writer::from_path(ref_file_path)?;
+    let mut wrt_ref = WriterBuilder::new()
+        .delimiter(b'\t')
+        .quote_style(QuoteStyle::Always)
+        .from_path(ref_file_path)?;
+
     if let Some(inner_license_map) = &licenseRef.hasExtractedLicensingInfos{
         if let Some(license_map) = inner_license_map{
             for license_info in license_map{
@@ -91,7 +102,11 @@ pub async fn write_ref_csv(licenseRef: &HasLicenseInfo, ref_file_path: &String) 
 }
 
 pub async fn write_simple_spdx_csv(packages: &Packages, license_extract: &HasLicenseInfo, csv_path: &String) -> Result<(), Box<dyn Error>>{
-    let mut wtr = Writer::from_path(csv_path)?;
+    let mut wtr = WriterBuilder::new()
+        .delimiter(b'\t')
+        .quote_style(QuoteStyle::Always)
+        .from_path(csv_path)?;
+
     for package in &packages.packages{
         let package_name = &package.name;
         let mut purl = "";

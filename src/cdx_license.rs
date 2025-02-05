@@ -1,7 +1,7 @@
 use serde_derive::{Deserialize, Serialize};
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
-use csv::Writer;
+use csv::{QuoteStyle, Writer, WriterBuilder};
 use std::error::Error;
 use regex::Regex;
 
@@ -52,15 +52,18 @@ pub struct LicenseHeader<'a>{
     namespace: &'a String,
     group: &'a String,
     version: &'a String,
+    #[serde(rename = "package reference")]
     package_reference: &'a String,
+    #[serde(rename = "license id")]
     license_id: &'a String,
+    #[serde(rename = "license name")]
     license_name: &'a String,
     //license_url: &'a String,
+    #[serde(rename = "license expression")]
     license_expression: &'a String,
+    #[serde(rename = "alternate package reference")]
     alternate_reference_locator: &'a String,
 }
-
-
 
 pub async fn get_cdx_bom_license(filepath: &str, output_path: &String){
     let mut file = File::open(filepath).await.expect("Error reading the file, make sure the path exists");
@@ -72,7 +75,12 @@ pub async fn get_cdx_bom_license(filepath: &str, output_path: &String){
 }
 
 pub async fn write_simple_cdx_csv(comp: &Components, csv_path: &String) -> Result<(), Box<dyn Error>>{
-    let mut wtr = Writer::from_path(csv_path)?;
+    let mut wtr = WriterBuilder::new()
+        .delimiter(b'\t')
+        .quote_style(QuoteStyle::Always)
+        .from_path(csv_path)?;
+
+    // let mut wtr = Writer::from_path(csv_path)?;
     let mut sbom_name = "";
     let mut sbom_group = "";
     let mut sbom_version = "";
