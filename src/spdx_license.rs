@@ -1,32 +1,34 @@
+use csv::{QuoteStyle, Writer, WriterBuilder};
+use regex::Regex;
 use serde_derive::{Deserialize, Serialize};
+use std::error::Error;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
-use csv::{QuoteStyle, Writer, WriterBuilder};
-use std::error::Error; 
-use log::info;
-use regex::Regex;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ReferenceObj{
+pub struct externalRef {
     pub referenceCategory: String,
     pub referenceLocator: String,
     pub referenceType: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct PackageObj{
-    pub licenseDeclared: Option<String>,
-    pub externalRefs: Option<Option<Vec<ReferenceObj>>>,
+pub struct Packages {
     pub name: String,
+    pub versionInfo: String,
+    pub licenseDeclared: Option<String>,
+    pub externalRefs: Option<Option<Vec<externalRef>>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Packages{
-    pub packages: Vec<PackageObj>,
+pub struct SPDXSBOM {
+    pub packages: Vec<Packages>,
+    pub name: String,
+    pub documentNamespace: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct LicenseInfo{
+pub struct LicenseInfo {
     pub extractedText: String,
     pub licenseId: String,
     pub name: String,
@@ -34,32 +36,34 @@ pub struct LicenseInfo{
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct HasLicenseInfo{
+pub struct HasLicenseInfo {
     pub hasExtractedLicensingInfos: Option<Option<Vec<LicenseInfo>>>,
     pub documentNamespace: String,
     pub name: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct LicenseHeader{
+pub struct LicenseHeader {
+    #[serde(rename = "SBOM name")]
     name: String,
-    namespace: String,
-    group: String,
-    version: String,
-    #[serde(rename = "package reference")]
-    package_reference: String,
-    #[serde(rename = "license id")]
-    license_id: String,
-    #[serde(rename = "license name")]
-    license_name: String,
-    #[serde(rename = "license expression")]
-    license_expression: String,
-    #[serde(rename = "alternate package reference")]
-    alternate_ref: String,
+    #[serde(rename = "SBOM id")]
+    documentNamespace: String,
+    #[serde(rename = "package name")]
+    package_name: String,
+    #[serde(rename = "package group")]
+    package_group: String,
+    #[serde(rename = "package version")]
+    package_version: String,
+    #[serde(rename = "package purl")]
+    package_purl: String,
+    #[serde(rename = "package cpe")]
+    package_cpe: String,
+    #[serde(rename = "license")]
+    license: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct LicenseRefHeader{
+pub struct LicenseRefHeader {
     #[serde(rename = "licenseId")]
     license_id: String,
     name: String,
@@ -68,27 +72,35 @@ pub struct LicenseRefHeader{
     comment: String,
 }
 
-pub async fn get_spdx_bom_license(filepath: &str, output_path: &String, ref_file_path: &String){
-    let mut file = File::open(filepath).await.expect("Error reading the file, make sure the path exists");
+pub async fn get_spdx_bom_license(filepath: &str, output_path: &String, ref_file_path: &String) {
+    let mut file = File::open(filepath)
+        .await
+        .expect("Error reading the file, make sure the path exists");
     let mut content_str = String::new();
-    file.read_to_string(& mut content_str).await.expect("Error Reading file to variable");
-    let data: Packages = serde_json::from_str(&content_str).expect("Error converting Json");
-    let license_extract: HasLicenseInfo = serde_json::from_str(&content_str).expect("Error converting Json");
+    file.read_to_string(&mut content_str)
+        .await
+        .expect("Error Reading file to variable");
+    let data: SPDXSBOM = serde_json::from_str(&content_str).expect("Error converting Json");
+    let license_extract: HasLicenseInfo =
+        serde_json::from_str(&content_str).expect("Error converting Json");
     //let _ = write_spdx_csv(&data, &license_extract, output_path).await;
-    let _ = write_simple_spdx_csv(&data, &license_extract, output_path).await;
+    let _ = write_simple_spdx_csv(&data, output_path).await;
     let _ = write_ref_csv(&license_extract, ref_file_path).await;
 }
 
-pub async fn write_ref_csv(licenseRef: &HasLicenseInfo, ref_file_path: &String) -> Result<(), Box<dyn Error>>{
+pub async fn write_ref_csv(
+    licenseRef: &HasLicenseInfo,
+    ref_file_path: &String,
+) -> Result<(), Box<dyn Error>> {
     let mut wrt_ref = WriterBuilder::new()
         .delimiter(b'\t')
         .quote_style(QuoteStyle::Always)
         .from_path(ref_file_path)?;
 
-    if let Some(inner_license_map) = &licenseRef.hasExtractedLicensingInfos{
-        if let Some(license_map) = inner_license_map{
-            for license_info in license_map{
-                wrt_ref.serialize(LicenseRefHeader{
+    if let Some(inner_license_map) = &licenseRef.hasExtractedLicensingInfos {
+        if let Some(license_map) = inner_license_map {
+            for license_info in license_map {
+                wrt_ref.serialize(LicenseRefHeader {
                     license_id: license_info.licenseId.to_string(),
                     name: license_info.name.to_string(),
                     extracted_text: license_info.extractedText.to_string(),
@@ -101,105 +113,113 @@ pub async fn write_ref_csv(licenseRef: &HasLicenseInfo, ref_file_path: &String) 
     Ok(())
 }
 
-pub async fn write_simple_spdx_csv(packages: &Packages, license_extract: &HasLicenseInfo, csv_path: &String) -> Result<(), Box<dyn Error>>{
+pub async fn write_simple_spdx_csv(
+    sbom_content: &SPDXSBOM,
+    csv_path: &String,
+) -> Result<(), Box<dyn Error>> {
     let mut wtr = WriterBuilder::new()
         .delimiter(b'\t')
         .quote_style(QuoteStyle::Always)
         .from_path(csv_path)?;
-
-    for package in &packages.packages{
-        let package_name = &package.name;
-        let mut purl = "";
-        let mut license_declared = "";
-        let mut alternate_ref = Vec::new();
-        if let Some(license_expression) = &package.licenseDeclared{
-            license_declared = license_expression;
-            if let Some(inner_external_ref) = &package.externalRefs{
-                if let Some(external_refs) = inner_external_ref{
-                    for reference in external_refs{
-                        if &reference.referenceType == "purl"{
-                            purl = &reference.referenceLocator;
-                        }else{
-                            alternate_ref.push(reference.referenceLocator.clone());
+    let document_namespace = &sbom_content.documentNamespace;
+    let sbom_name = &sbom_content.name;
+    for package in &sbom_content.packages {
+        let package_name = &package.name.clone();
+        let package_version = &package.versionInfo.clone();
+        let package_group = "";
+        let mut license_text = "";
+        let mut package_cpe = Vec::new();
+        let mut package_purl = "";
+        if let Some(license_expression) = &package.licenseDeclared {
+            license_text = license_expression;
+            if let Some(inner_external_ref) = &package.externalRefs {
+                if let Some(external_refs) = inner_external_ref {
+                    for reference in external_refs {
+                        if &reference.referenceType == "purl" {
+                            package_purl = &reference.referenceLocator;
+                        } else if &reference.referenceType == "cpe22Type" {
+                            package_cpe.push(reference.referenceLocator.clone());
                         }
                     }
-  
                 }
             }
         }
-        wtr.serialize(LicenseHeader{
+        wtr.serialize(LicenseHeader {
             //name: package_name.to_string(),
-            name: license_extract.name.to_string(),
-            namespace: license_extract.documentNamespace.to_string(),
-            group: "".to_string(),
-            version: "".to_string(),
-            package_reference: purl.to_string(),
-            license_id: "".to_string(),
-            license_name: "".to_string(),
-            license_expression: license_declared.to_string(),
-            alternate_ref: alternate_ref.join("\n").to_string(),
+            name: sbom_name.to_string(),
+            documentNamespace: document_namespace.to_string(),
+            package_name: package_name.to_string(),
+            package_group: package_group.to_string(),
+            package_version: package_version.to_string(),
+            package_purl: package_purl.to_string(),
+            package_cpe: package_cpe.join("\n").to_string(),
+            license: license_text.to_string(),
         });
     }
     wtr.flush()?;
     Ok(())
 }
 
-pub async fn write_spdx_csv(packages: &Packages, licenseRef: &HasLicenseInfo, csv_path: &String) -> Result<(), Box<dyn Error>>{
-    // This block of code is extensive
-    // It is capable of splitting the Licenses under license Declared field and remove the brackets and write it on separate rows
-    // It is capable of mapping the license ID's against hasExtractedLicensingInfos field in SBOM and update "license name" column
-    // Right now, it is not being used
-    let mut wtr = Writer::from_path(csv_path)?;
-    for package in &packages.packages{
-        let package_name = &package.name;
-        let re = Regex::new(r" OR | AND ").unwrap();
-        if let Some(license_id_spdx) = &package.licenseDeclared{
-            let license_id_list = license_id_spdx.replace("(","").replace(")","");
-            let license_ids: Vec<&str> = re.split(&license_id_list).collect();
-            for id in license_ids{
-                let mut license_name = id;
-                if let Some(license_map) = &licenseRef.hasExtractedLicensingInfos{
-                    if let Some(mapping) = license_map{
-                        for map in mapping{
-                            if map.licenseId == license_name{
-                                license_name = &map.name;
-                                break;
-                            }
-                        }
-                    }
-                }
-                if let Some(inner_external_ref) = &package.externalRefs{
-                    if let Some(external_refs) = inner_external_ref{
-                        let mut purl = "";
-                        let mut alternate_ref = Vec::new();
-                        for reference in external_refs{
-                            if &reference.referenceType == "purl"{
-                                purl = &reference.referenceLocator;
-                            }else{
-                                alternate_ref.push(reference.referenceLocator.clone());
-                            }
-                        }
-                        wtr.serialize(LicenseHeader{
-                            name: package_name.to_string(),
-                            namespace: licenseRef.documentNamespace.to_string(),
-                            group: "".to_string(),
-                            version: "".to_string(),
-                            package_reference: purl.to_string(),
-                            license_id: id.to_string(),
-                            license_name: license_name.to_string(),
-                            license_expression: "".to_string(),
-                            alternate_ref: alternate_ref.join("\n").to_string(),
-                            // name: package_name.to_string(),
-                            // package_reference: purl.to_string(),
-                            // license_id: id.to_string(),
-                            // license_name: license_name.to_string(),
-                            // alternate_ref: alternate_ref.join(" ").to_string(),
-                        });
-                    }
-                }
-            }
-        }
-    }
-    wtr.flush()?;
-    Ok(())
-}
+// pub async fn write_spdx_csv(
+//     packages: &Packages,
+//     licenseRef: &HasLicenseInfo,
+//     csv_path: &String,
+// ) -> Result<(), Box<dyn Error>> {
+//     // This block of code is extensive
+//     // It is capable of splitting the Licenses under license Declared field and remove the brackets and write it on separate rows
+//     // It is capable of mapping the license ID's against hasExtractedLicensingInfos field in SBOM and update "license name" column
+//     // Right now, it is not being used
+//     let mut wtr = Writer::from_path(csv_path)?;
+//     for package in &packages.packages {
+//         let package_name = &package.name;
+//         let re = Regex::new(r" OR | AND ").unwrap();
+//         if let Some(license_id_spdx) = &package.licenseDeclared {
+//             let license_id_list = license_id_spdx.replace("(", "").replace(")", "");
+//             let license_ids: Vec<&str> = re.split(&license_id_list).collect();
+//             for id in license_ids {
+//                 let mut license_name = id;
+//                 if let Some(license_map) = &licenseRef.hasExtractedLicensingInfos {
+//                     if let Some(mapping) = license_map {
+//                         for map in mapping {
+//                             if map.licenseId == license_name {
+//                                 license_name = &map.name;
+//                                 break;
+//                             }
+//                         }
+//                     }
+//                 }
+//                 if let Some(inner_external_ref) = &package.externalRefs {
+//                     if let Some(external_refs) = inner_external_ref {
+//                         let mut purl = "";
+//                         let mut alternate_ref = Vec::new();
+//                         for reference in external_refs {
+//                             if &reference.referenceType == "purl" {
+//                                 purl = &reference.referenceLocator;
+//                             } else {
+//                                 alternate_ref.push(reference.referenceLocator.clone());
+//                             }
+//                         }
+//                         wtr.serialize(LicenseHeader {
+//                             name: package_name.to_string(),
+//                             namespace: licenseRef.documentNamespace.to_string(),
+//                             group: "".to_string(),
+//                             version: "".to_string(),
+//                             package_reference: purl.to_string(),
+//                             license_id: id.to_string(),
+//                             license_name: license_name.to_string(),
+//                             license_expression: "".to_string(),
+//                             alternate_ref: alternate_ref.join("\n").to_string(),
+//                             // name: package_name.to_string(),
+//                             // package_reference: purl.to_string(),
+//                             // license_id: id.to_string(),
+//                             // license_name: license_name.to_string(),
+//                             // alternate_ref: alternate_ref.join(" ").to_string(),
+//                         });
+//                     }
+//                 }
+//             }
+//         }
+//     }
+//     wtr.flush()?;
+//     Ok(())
+// }

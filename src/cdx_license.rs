@@ -1,146 +1,150 @@
+use csv::{QuoteStyle, WriterBuilder};
 use serde_derive::{Deserialize, Serialize};
+use std::error::Error;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
-use csv::{QuoteStyle, Writer, WriterBuilder};
-use std::error::Error;
-use regex::Regex;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct License{
+pub struct License {
     pub id: Option<String>,
     pub name: Option<String>,
-    pub url: Option<String>,    
+    pub url: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct LicenseEntry{
+pub struct LicenseEntry {
     pub license: Option<License>,
     pub expression: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Component{
+pub struct Component {
     pub name: String,
+    pub group: Option<Option<String>>,
+    pub version: Option<Option<String>>,
     pub licenses: Option<Option<Vec<LicenseEntry>>>,
     pub purl: Option<String>,
     pub cpe: Option<Option<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Components{
+pub struct CycloneDXSBOM {
     pub metadata: SBOMMetadata,
     pub components: Vec<Component>,
+    pub serialNumber: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct SBOMMetadata{
+pub struct SBOMMetadata {
     pub component: Option<Option<SBOMComponent>>,
     pub licenses: Option<Option<Vec<LicenseEntry>>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct SBOMComponent{
-    pub group: Option<Option<String>>,
-    pub version: Option<Option<String>>,
+pub struct SBOMComponent {
     pub name: String,
     pub licenses: Option<Option<Vec<LicenseEntry>>>,
 }
 
 #[derive(Serialize, Debug)]
-pub struct LicenseHeader<'a>{
+pub struct LicenseHeader<'a> {
+    #[serde(rename = "SBOM name")]
     name: &'a String,
-    namespace: &'a String,
-    group: &'a String,
-    version: &'a String,
-    #[serde(rename = "package reference")]
-    package_reference: &'a String,
-    #[serde(rename = "license id")]
-    license_id: &'a String,
-    #[serde(rename = "license name")]
-    license_name: &'a String,
-    //license_url: &'a String,
-    #[serde(rename = "license expression")]
-    license_expression: &'a String,
-    #[serde(rename = "alternate package reference")]
-    alternate_reference_locator: &'a String,
+    #[serde(rename = "SBOM id")]
+    serialNumber: &'a String,
+    #[serde(rename = "package name")]
+    package_name: &'a String,
+    #[serde(rename = "package group")]
+    package_group: &'a String,
+    #[serde(rename = "package version")]
+    package_version: &'a String,
+    #[serde(rename = "package purl")]
+    package_purl: &'a String,
+    #[serde(rename = "package cpe")]
+    package_cpe: &'a String,
+    #[serde(rename = "license")]
+    license: &'a String,
 }
 
-pub async fn get_cdx_bom_license(filepath: &str, output_path: &String){
-    let mut file = File::open(filepath).await.expect("Error reading the file, make sure the path exists");
+pub async fn get_cdx_bom_license(filepath: &str, output_path: &String) {
+    let mut file = File::open(filepath)
+        .await
+        .expect("Error reading the file, make sure the path exists");
     let mut content_str = String::new();
-    file.read_to_string(&mut content_str).await.expect("Error Reading file to variable");
-    let data: Components = serde_json::from_str(&content_str).expect("Error converting Json");
+    file.read_to_string(&mut content_str)
+        .await
+        .expect("Error Reading file to variable");
+    let data: CycloneDXSBOM = serde_json::from_str(&content_str).expect("Error converting Json");
     //let _ = write_cdx_csv(&data, output_path).await;
     let _ = write_simple_cdx_csv(&data, output_path).await;
 }
 
-pub async fn write_simple_cdx_csv(comp: &Components, csv_path: &String) -> Result<(), Box<dyn Error>>{
+pub async fn write_simple_cdx_csv(
+    sbom_content: &CycloneDXSBOM,
+    csv_path: &String,
+) -> Result<(), Box<dyn Error>> {
     let mut wtr = WriterBuilder::new()
         .delimiter(b'\t')
         .quote_style(QuoteStyle::Always)
         .from_path(csv_path)?;
 
     // let mut wtr = Writer::from_path(csv_path)?;
+    let serial_num = &sbom_content.serialNumber;
+    let sbom_data = &sbom_content.metadata;
     let mut sbom_name = "";
-    let mut sbom_group = "";
-    let mut sbom_version = "";
-    let sbom_data = &comp.metadata;
-    if let Some(innerData) = &sbom_data.component{
-        if let Some(sbom_component)= innerData{
+    if let Some(innerData) = &sbom_data.component {
+        if let Some(sbom_component) = innerData {
             sbom_name = &sbom_component.name;
-            if let Some(innerGrp) = &sbom_component.group{
-                if let Some(group) = innerGrp{
-                    sbom_group = group;
-                }                
-            }
-            if let Some(innerVer) = &sbom_component.version{
-                if let Some(version) = innerVer{
-                    sbom_version = version;
-                }      
-            }
-        }   
+        }
     }
 
-    for component in &comp.components{      
+    for component in &sbom_content.components {
         let package_name = component.name.clone();
+        let mut package_version = "";
+        let mut package_group = "";
         let mut cpe_name = "";
-        if let Some(inner_cpe) = &component.cpe{
-            if let Some(cpe) = inner_cpe{
+        if let Some(inner_version) = &component.version {
+            if let Some(purl_version) = inner_version {
+                package_version = &purl_version;
+            }
+        }
+        if let Some(inner_group) = &component.group {
+            if let Some(purl_group) = inner_group {
+                package_group = &purl_group;
+            }
+        }
+        if let Some(inner_cpe) = &component.cpe {
+            if let Some(cpe) = inner_cpe {
                 cpe_name = &cpe;
             }
         }
-        if let Some(purl) = &component.purl{
-            if let Some(inner_licenses) = &component.licenses{
-                if let Some(licenses) = inner_licenses{
-
+        if let Some(purl) = &component.purl {
+            if let Some(inner_licenses) = &component.licenses {
+                if let Some(licenses) = inner_licenses {
                     //let mut license_url = "";
-                    for entry in licenses{
-                        let mut license_id = "";
-                        let mut license_exp = "";
-                        let mut license_name = "";
-                        if let Some(license) = &entry.license{
-                            if let Some(id)=&license.id{
-                                license_id = id;
+                    for entry in licenses {
+                        let mut license_text = "";
+                        if let Some(license) = &entry.license {
+                            if let Some(id) = &license.id {
+                                license_text = id;
                             }
-                            if let Some(name)=&license.name{
-                                license_name = name;
+                            if let Some(name) = &license.name {
+                                license_text = name;
                             }
                         }
-                        if let Some(expression)=&entry.expression{
-                            license_exp = expression;
+                        if let Some(expression) = &entry.expression {
+                            license_text = expression;
                         }
-                        let _ = wtr.serialize(LicenseHeader{
+                        let _ = wtr.serialize(LicenseHeader {
                             name: &sbom_name.to_string(),
-                            namespace: &"".to_string(),
-                            group: &sbom_group.to_string(),
-                            version: &sbom_version.to_string(),
-                            package_reference: &purl.to_string(),
-                            license_id: &license_id.to_string(),
-                            license_name: &license_name.to_string(),
-                            license_expression: &license_exp.to_string(),
-                            alternate_reference_locator: &cpe_name.to_string(),
-                            }
-                        );
+                            serialNumber: &serial_num.to_string(),
+                            package_name: &package_name.to_string(),
+                            package_group: &package_group.to_string(),
+                            package_version: &package_version.to_string(),
+                            package_purl: &purl.to_string(),
+                            package_cpe: &cpe_name.to_string(),
+                            license: &license_text.to_string(),
+                        });
                     }
                 }
             }
@@ -152,7 +156,7 @@ pub async fn write_simple_cdx_csv(comp: &Components, csv_path: &String) -> Resul
 
 // pub async fn write_cdx_csv(comp: &Components, csv_path: &String) -> Result<(), Box<dyn Error>>{
 //     let mut wtr = Writer::from_path(csv_path)?;
-//     for component in &comp.components{      
+//     for component in &comp.components{
 //         let package_name = component.name.clone();
 //         let mut cpe_name = "";
 //         if let Some(inner_cpe) = &component.cpe{
@@ -179,7 +183,7 @@ pub async fn write_simple_cdx_csv(comp: &Components, csv_path: &String) -> Resul
 //                             // if let Some(url)=&license.url{
 //                             //     license_url = url;
 //                             // }
-//                             if !license_id.is_empty() && license_id != ""{    
+//                             if !license_id.is_empty() && license_id != ""{
 //                                 let _ = wtr.serialize(LicenseHeader{
 //                                     name: &package_name.to_string(),
 //                                     package_reference: &purl.to_string(),
@@ -219,7 +223,7 @@ pub async fn write_simple_cdx_csv(comp: &Components, csv_path: &String) -> Resul
 //                                 );
 //                             }
 //                         }
-                        
+
 //                         // This block is to split license expressions into individuals and handle them on each row.
 //                         // //let expression = license_exp.replace("(","").replace(")","");
 //                         // let re = Regex::new(r" OR | AND ").unwrap();
@@ -238,7 +242,7 @@ pub async fn write_simple_cdx_csv(comp: &Components, csv_path: &String) -> Resul
 //                         //             }
 //                         //         );
 //                         //     }
-                            
+
 //                         // }
 
 //                     }
