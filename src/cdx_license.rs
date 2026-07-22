@@ -54,13 +54,7 @@ pub struct LicenseHeader<'a>{
     version: &'a String,
     #[serde(rename = "package reference")]
     package_reference: &'a String,
-    #[serde(rename = "license id")]
-    license_id: &'a String,
-    #[serde(rename = "license name")]
-    license_name: &'a String,
-    //license_url: &'a String,
-    #[serde(rename = "license expression")]
-    license_expression: &'a String,
+    license: &'a String,
     #[serde(rename = "alternate package reference")]
     alternate_reference_locator: &'a String,
 }
@@ -113,21 +107,17 @@ pub async fn write_simple_cdx_csv(comp: &Components, csv_path: &String) -> Resul
             if let Some(inner_licenses) = &component.licenses{
                 if let Some(licenses) = inner_licenses{
 
-                    //let mut license_url = "";
                     for entry in licenses{
-                        let mut license_id = "";
-                        let mut license_exp = "";
-                        let mut license_name = "";
+                        let mut license_value = String::new();
                         if let Some(license) = &entry.license{
-                            if let Some(id)=&license.id{
-                                license_id = id;
-                            }
-                            if let Some(name)=&license.name{
-                                license_name = name;
+                            if let Some(id) = &license.id{
+                                license_value = id.clone();
+                            } else if let Some(name) = &license.name{
+                                license_value = name.clone();
                             }
                         }
-                        if let Some(expression)=&entry.expression{
-                            license_exp = expression;
+                        if let Some(expression) = &entry.expression{
+                            license_value = expression.clone();
                         }
                         let _ = wtr.serialize(LicenseHeader{
                             name: &sbom_name.to_string(),
@@ -135,9 +125,7 @@ pub async fn write_simple_cdx_csv(comp: &Components, csv_path: &String) -> Resul
                             group: &sbom_group.to_string(),
                             version: &sbom_version.to_string(),
                             package_reference: &purl.to_string(),
-                            license_id: &license_id.to_string(),
-                            license_name: &license_name.to_string(),
-                            license_expression: &license_exp.to_string(),
+                            license: &license_value,
                             alternate_reference_locator: &cpe_name.to_string(),
                             }
                         );

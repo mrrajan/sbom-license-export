@@ -8,6 +8,7 @@ This Rust-based tool is designed to extract license information from an SBOM (So
 - **License Extraction**: Extracts the license(s) associated with each package listed in the SBOM.
 - **CSV Export**: Outputs the package name, version, and associated license(s) in CSV format.
 - **Configurable Output Path**: Allows users to specify the output path for the CSV file.
+- **License Comparison**: Optionally compare generated output against a trustify license export directory.
 
 ## Requirements
 
@@ -25,6 +26,28 @@ Clone the repository
 
 Run the command
 
-    cargo run -- --sbom_file <sbom file path> --sbom_type <sbom type> -o <output csv location>
+    cargo run -- --sbom_file <sbom file path> --sbom_type <sbom type>
 
-    
+### Options
+
+| Flag | Short | Description | Required |
+|------|-------|-------------|----------|
+| `--sbom_file` | `-p` | Path to the SBOM JSON file | Yes |
+| `--sbom_type` | `-t` | SBOM format: `spdx` or `cdx` | Yes |
+| `--csv_path` | `-o` | Output CSV path (default: `<sbom_name>_licenses.csv`) | No |
+| `--ref_file_path` | `-r` | Output license ref CSV path, SPDX only (default: `<sbom_name>_license_ref.csv`) | No |
+| `--compare_path` | `-c` | Directory containing trustify license export to compare against | No |
+
+### Examples
+
+Extract licenses from an SPDX SBOM:
+
+    cargo run -- -p quarkus-bom.json -t spdx
+
+Extract licenses and compare against a trustify export:
+
+    cargo run -- -p quarkus-bom.json -t spdx -c ~/Downloads/quarkus-bom_licenses_1/
+
+Extract licenses from a CycloneDX SBOM with a custom output path:
+
+    cargo run -- -p app-sbom.json -t cdx -o app_licenses.csv

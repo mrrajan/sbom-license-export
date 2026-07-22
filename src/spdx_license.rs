@@ -16,6 +16,7 @@ pub struct ReferenceObj{
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PackageObj{
     pub licenseDeclared: Option<String>,
+    pub licenseConcluded: Option<String>,
     pub externalRefs: Option<Option<Vec<ReferenceObj>>>,
     pub name: String,
 }
@@ -48,6 +49,8 @@ pub struct LicenseHeader{
     version: String,
     #[serde(rename = "package reference")]
     package_reference: String,
+    #[serde(rename = "license type")]
+    license_type: String,
     #[serde(rename = "license id")]
     license_id: String,
     #[serde(rename = "license name")]
@@ -111,33 +114,49 @@ pub async fn write_simple_spdx_csv(packages: &Packages, license_extract: &HasLic
         let package_name = &package.name;
         let mut purl = "";
         let mut license_declared = "";
+        let mut license_concluded = "";
         let mut alternate_ref = Vec::new();
         if let Some(license_expression) = &package.licenseDeclared{
             license_declared = license_expression;
-            if let Some(inner_external_ref) = &package.externalRefs{
-                if let Some(external_refs) = inner_external_ref{
-                    for reference in external_refs{
-                        if &reference.referenceType == "purl"{
-                            purl = &reference.referenceLocator;
-                        }else{
-                            alternate_ref.push(reference.referenceLocator.clone());
-                        }
+        }
+        if let Some(license_expression) = &package.licenseConcluded{
+            license_concluded = license_expression;
+        }
+        if let Some(inner_external_ref) = &package.externalRefs{
+            if let Some(external_refs) = inner_external_ref{
+                for reference in external_refs{
+                    if &reference.referenceType == "purl"{
+                        purl = &reference.referenceLocator;
+                    }else{
+                        alternate_ref.push(reference.referenceLocator.clone());
                     }
-  
                 }
             }
         }
+        let alternate_ref_str = alternate_ref.join("\n");
         wtr.serialize(LicenseHeader{
-            //name: package_name.to_string(),
             name: license_extract.name.to_string(),
             namespace: license_extract.documentNamespace.to_string(),
             group: "".to_string(),
             version: "".to_string(),
             package_reference: purl.to_string(),
+            license_type: "Declared".to_string(),
             license_id: "".to_string(),
             license_name: "".to_string(),
             license_expression: license_declared.to_string(),
-            alternate_ref: alternate_ref.join("\n").to_string(),
+            alternate_ref: alternate_ref_str.clone(),
+        });
+        wtr.serialize(LicenseHeader{
+            name: license_extract.name.to_string(),
+            namespace: license_extract.documentNamespace.to_string(),
+            group: "".to_string(),
+            version: "".to_string(),
+            package_reference: purl.to_string(),
+            license_type: "Concluded".to_string(),
+            license_id: "".to_string(),
+            license_name: "".to_string(),
+            license_expression: license_concluded.to_string(),
+            alternate_ref: alternate_ref_str,
         });
     }
     wtr.flush()?;
@@ -185,15 +204,11 @@ pub async fn write_spdx_csv(packages: &Packages, licenseRef: &HasLicenseInfo, cs
                             group: "".to_string(),
                             version: "".to_string(),
                             package_reference: purl.to_string(),
+                            license_type: "Declared".to_string(),
                             license_id: id.to_string(),
                             license_name: license_name.to_string(),
                             license_expression: "".to_string(),
                             alternate_ref: alternate_ref.join("\n").to_string(),
-                            // name: package_name.to_string(),
-                            // package_reference: purl.to_string(),
-                            // license_id: id.to_string(),
-                            // license_name: license_name.to_string(),
-                            // alternate_ref: alternate_ref.join(" ").to_string(),
                         });
                     }
                 }
