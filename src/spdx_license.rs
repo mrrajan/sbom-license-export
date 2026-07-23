@@ -49,14 +49,7 @@ pub struct LicenseHeader{
     version: String,
     #[serde(rename = "package reference")]
     package_reference: String,
-    #[serde(rename = "license type")]
-    license_type: String,
-    #[serde(rename = "license id")]
-    license_id: String,
-    #[serde(rename = "license name")]
-    license_name: String,
-    #[serde(rename = "license expression")]
-    license_expression: String,
+    license: String,
     #[serde(rename = "alternate package reference")]
     alternate_ref: String,
 }
@@ -88,15 +81,17 @@ pub async fn write_ref_csv(licenseRef: &HasLicenseInfo, ref_file_path: &String) 
         .quote_style(QuoteStyle::Always)
         .from_path(ref_file_path)?;
 
+    wrt_ref.write_record(&["licenseId", "name", "extracted text", "comment"])?;
+
     if let Some(inner_license_map) = &licenseRef.hasExtractedLicensingInfos{
         if let Some(license_map) = inner_license_map{
             for license_info in license_map{
-                wrt_ref.serialize(LicenseRefHeader{
-                    license_id: license_info.licenseId.to_string(),
-                    name: license_info.name.to_string(),
-                    extracted_text: license_info.extractedText.to_string(),
-                    comment: license_info.comment.to_string(),
-                });
+                wrt_ref.write_record(&[
+                    &license_info.licenseId,
+                    &license_info.name,
+                    &license_info.extractedText,
+                    &license_info.comment,
+                ])?;
             }
         }
     }
@@ -108,10 +103,12 @@ pub async fn write_simple_spdx_csv(packages: &Packages, license_extract: &HasLic
     let mut wtr = WriterBuilder::new()
         .delimiter(b'\t')
         .quote_style(QuoteStyle::Always)
+        .has_headers(false)
         .from_path(csv_path)?;
 
+    wtr.write_record(&["name", "namespace", "group", "version", "package reference", "license", "alternate package reference"])?;
+
     for package in &packages.packages{
-        let package_name = &package.name;
         let mut purl = "";
         let mut license_declared = "";
         let mut license_concluded = "";
@@ -134,30 +131,28 @@ pub async fn write_simple_spdx_csv(packages: &Packages, license_extract: &HasLic
             }
         }
         let alternate_ref_str = alternate_ref.join("\n");
-        wtr.serialize(LicenseHeader{
-            name: license_extract.name.to_string(),
-            namespace: license_extract.documentNamespace.to_string(),
-            group: "".to_string(),
-            version: "".to_string(),
-            package_reference: purl.to_string(),
-            license_type: "Declared".to_string(),
-            license_id: "".to_string(),
-            license_name: "".to_string(),
-            license_expression: license_declared.to_string(),
-            alternate_ref: alternate_ref_str.clone(),
-        });
-        wtr.serialize(LicenseHeader{
-            name: license_extract.name.to_string(),
-            namespace: license_extract.documentNamespace.to_string(),
-            group: "".to_string(),
-            version: "".to_string(),
-            package_reference: purl.to_string(),
-            license_type: "Concluded".to_string(),
-            license_id: "".to_string(),
-            license_name: "".to_string(),
-            license_expression: license_concluded.to_string(),
-            alternate_ref: alternate_ref_str,
-        });
+        if !license_declared.is_empty() {
+            wtr.serialize(LicenseHeader{
+                name: license_extract.name.to_string(),
+                namespace: license_extract.documentNamespace.to_string(),
+                group: "".to_string(),
+                version: "".to_string(),
+                package_reference: purl.to_string(),
+                license: license_declared.to_string(),
+                alternate_ref: alternate_ref_str.clone(),
+            });
+        }
+        if !license_concluded.is_empty() {
+            wtr.serialize(LicenseHeader{
+                name: license_extract.name.to_string(),
+                namespace: license_extract.documentNamespace.to_string(),
+                group: "".to_string(),
+                version: "".to_string(),
+                package_reference: purl.to_string(),
+                license: license_concluded.to_string(),
+                alternate_ref: alternate_ref_str,
+            });
+        }
     }
     wtr.flush()?;
     Ok(())
@@ -204,10 +199,7 @@ pub async fn write_spdx_csv(packages: &Packages, licenseRef: &HasLicenseInfo, cs
                             group: "".to_string(),
                             version: "".to_string(),
                             package_reference: purl.to_string(),
-                            license_type: "Declared".to_string(),
-                            license_id: id.to_string(),
-                            license_name: license_name.to_string(),
-                            license_expression: "".to_string(),
+                            license: id.to_string(),
                             alternate_ref: alternate_ref.join("\n").to_string(),
                         });
                     }

@@ -24,6 +24,7 @@ fn read_tsv_keys(
 ) -> Result<HashSet<(String, String, String)>, Box<dyn Error>> {
     let mut rdr = ReaderBuilder::new()
         .delimiter(b'\t')
+        .quoting(true)
         .from_path(path)?;
     let headers = rdr.headers()?.clone();
     let purl_idx = headers.iter().position(|h| h == purl_col)
@@ -108,17 +109,9 @@ pub fn compare_licenses(our_csv: &str, our_ref_csv: Option<&str>, compare_dir: &
         println!("Our file:   {}", our_csv);
         println!("Their file: {}", their_lic_path);
 
-        let our_result = if sbom_type == "spdx" {
-            read_tsv_keys(our_csv, "package reference", "license expression", Some("license type"))
-        } else {
-            read_tsv_keys(our_csv, "package reference", "license", None)
-        };
+        let our_result = read_tsv_keys(our_csv, "package reference", "license", None);
 
-        let their_result = if sbom_type == "spdx" {
-            read_tsv_keys(their_lic_path, "package purl", "license", Some("license type"))
-        } else {
-            read_tsv_keys(their_lic_path, "package purl", "license", None)
-        };
+        let their_result = read_tsv_keys(their_lic_path, "package purl", "license", None);
 
         match (our_result, their_result) {
             (Ok(our_keys), Ok(their_keys)) => {
